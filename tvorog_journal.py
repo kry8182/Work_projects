@@ -1,10 +1,12 @@
 #!/usr/bin/python
+# TVOROG_JOURNAL
 
 import sys
 import pandas
 import psycopg2
 import os
 import datetime
+import numpy
 
 
 def sql_script(path_script, date_string): # Функция запуска sql-скрипта
@@ -78,22 +80,22 @@ else:
 
 # df_blk = pandas.read_excel( path_blk, sheet_name='blacklist', header=0, index_col=None )
 # df_term = pandas.read_excel( path_term, sheet_name='terminals', header=0, index_col=None )
-df_tvg_alarm = pandas.read_csv( 'C:/ETL/tvorog/Tvorog_journal/' + path_tvg_alarm, sep = ',', usecols=['ID', 'On-date&time','Off-date&time','Message'] )
+df_tvg_alarm = pandas.read_csv( 'C:/ETL/tvorog/Tvorog_journal/' + path_tvg_alarm, sep = ',', usecols=['ID', 'On-date&time','Off-date&time','Message'], encoding='cp932' )
 # df_tvg_alarm
 df_tvg_alarm = df_tvg_alarm.astype(str)
+
 
 # df_term = df_term.astype(str)
 # df_trans = df_trans.astype(str)
 # for i in range(0,len(df_tvg_alarm['Unnamed: 2'])):
 # 	df_tvg_alarm['Unnamed: 2'][i]= df_tvg_alarm['Unnamed: 2'][i].replace('nan','0')
 print('Readed')
-max_date = df_tvg_alarm['Group1'][len(df_tvg_alarm['Group1']) - 1]
+max_date = df_tvg_alarm['On-date&time'][len(df_tvg_alarm['On-date&time']) - 1]
 print(f'max date in file: {max_date}')
 
 
-
 #Считываем дату последней загрузки из таблицы метаданных
-curs.execute("select max_update_dt from meta_all")
+curs.execute("select max_update_dt from meta_all where table_name = 'Tvorog_journal'")
 date_from_meta = curs.fetchall()
 if len(date_from_meta) > 0:
     t = date_from_meta[0][0]
@@ -121,9 +123,12 @@ print('max date in meta:', date_from_meta_str)
 # 2. ВЫДЕЛЕНИЕ ВСТАВОК И ИЗМЕНЕНИЙ (скрипт transform_load.sql)
 print('Loading changes to DWH...')
 c = 0
-for i in range (0, len(df_tvg_alarm['Group1'])):
-    if df_tvg_alarm['Group1'][i] > date_from_meta_str: 
-        curs.execute(f"insert into tvorog_alkali_wash ( time, conc ) values (to_timestamp( '{df_tvg_alarm['Group1'][i]}', 'YYYY/MM/DD HH24:MI' ), '{df_tvg_alarm['WR00006'][i]}') ")
+for i  in range (0, len(df_tvg_alarm['On-date&time'])):
+    if df_tvg_alarm['On-date&time'][i] > date_from_meta_str: 
+        if  df_tvg_alarm['Off-date&time'][i] != 'nan' :
+        	curs.execute(f"insert into tvorog_journal ( on_time, off_time, message ) values (to_timestamp( '{df_tvg_alarm['On-date&time'][i]}', 'YYYY/MM/DD HH24:MI' ), to_timestamp( '{df_tvg_alarm['Off-date&time'][i]}', 'YYYY/MM/DD HH24:MI' ), '{df_tvg_alarm['Message'][i]}') ")
+        else: 
+        	curs.execute(f"insert into tvorog_journal ( on_time, message ) values (to_timestamp( '{df_tvg_alarm['On-date&time'][i]}', 'YYYY/MM/DD HH24:MI' ), '{df_tvg_alarm['Message'][i]}') ")
         c =+ c
 print(c,' rows inserted')
 # sql_script('/home/de1m/krlv/sql_scripts/transform_load.sql', date_term)
@@ -145,7 +150,7 @@ print(c,' rows inserted')
 print('Updating metadata...')
 # sql_script('/home/de1m/krlv/sql_scripts/meta.sql', date_blk)
 curs.execute(f"""insert INTO meta_all ( table_name, max_update_dt ) 
-values ('tvorog_alkali_wash', coalesce( to_timestamp( '{max_date}', 'YYYY/MM/DD HH24:MI:SS' ), to_date( '1900.01.01', 'YYYY.MM.DD' ))) 
+values ('tvorog_journal', coalesce( to_timestamp( '{max_date}', 'YYYY/MM/DD HH24:MI:SS' ), to_date( '1900.01.01', 'YYYY.MM.DD' ))) 
 on conflict (table_name) do
     update set max_update_dt = to_timestamp('{max_date}', 'YYYY/MM/DD HH24:MI:SS' )""")
 print('Updated')
