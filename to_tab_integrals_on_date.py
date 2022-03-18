@@ -36,7 +36,7 @@ def create_connection(db_name, db_user, db_password, db_host, db_port):
     return connection
 
 # Коннектимся с сервером
-print('=== ETL start ===')
+print('=== start ===')
 print('Connecting...')
 conn = create_connection("kip", "kip", "kip", "192.168.100.223", "5432")
 conn.autocommit = False
@@ -61,27 +61,39 @@ else:
     date_from_meta_str = t.strftime("%Y/%m/%d %H:%M:%S")
 print('max date in meta:', date_from_meta_str)
 
-# Вставляем данные в таблицу
-print('Loading data to table...')
-date = '2022/03/16'
-temp_threshold = 80
-curs.executemany(''' insert into steril_integals_on_date( date, t3 ) 
+# Ввод переменных
+date = input('Введите дату расчета: ')
+n = int(input('+ сколько дней еще расчитать: '))
+temp_threshold = int(input('порог температуры: '))
+
+# Расчитываем и вставляем данные в таблицу
+for i in range(0,n+1):
+    interval = str(i)
+    curs.execute(f''' insert into steril_integals_on_date( date, t3 ) 
     select 
-        timestamp '{date}',
+        timestamp '{date}' + interval '{interval}' day,
         avg(t)*count(t)*10 as t3_integral
     from (select 
         t_tank03 as t
        from table1 where t_tank03 > {temp_threshold}
-       and table1.current_time between (timestamp '{date}' - interval '1' day)  and timestamp '{date}'  
+       and table1.current_time between (timestamp '{date}' + interval '{interval}' day - interval '1' day)  and (timestamp '{date}' + interval '{interval}' day)
          ) tab
+        on conflict (date) do
+        update set t3 = (select avg(t)*count(t)*10 as t3_integral
+            from (select 
+            t_tank03 as t
+            from table1 where t_tank03 > {temp_threshold}
+            and table1.current_time between (timestamp '{date}' + interval '{interval}' day - interval '1' day)  and (timestamp '{date}' + interval '{interval}' day)
+            ) tab       )
                  ''' )
-# print(f'Loaded {curs.rowcount} rows to STG')
-# c = 0
-# for i in range (0, len(df_tvg_alk_bak['Group1'])):
-#     curs.execute(f"insert into tvorog_alkali_wash_stg ( time, conc ) values (to_timestamp( '{df_tvg_alk_bak['Group1'][i]}', 'YYYY/MM/DD HH24:MI' ), '{df_tvg_alk_bak['WR00006'][i]}') ")
-#     c =+ c
-# print(c,' rows inserted')
-# print('Loaded')
+print(i + 1,' rows inserted')
+
+# Выводим результат
+curs.execute(f'''select cast(max(t3) as numeric(7,0)), cast(avg(t3)as numeric(7,0)) from steril_integals_on_date
+where  date between (timestamp '{date}' - interval '1' day)  and (timestamp '{date}' + interval '{interval}' day) ''')
+answer = curs.fetchall()
+print('Максимум =', answer[0][0])
+print('Cреднее =', answer[0][1])
 
 
 #  ОБНОВЛЕНИЕ МЕТАДАННЫХ 
@@ -106,4 +118,5 @@ conn.commit()
 curs.close()
 conn.close()
 print('Connect closed')
+print('===== End =====')
 
