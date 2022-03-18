@@ -65,31 +65,34 @@ print('max date in meta:', date_from_meta_str)
 date = input('Введите дату расчета: ')
 n = int(input('+ сколько дней еще расчитать: '))
 temp_threshold = int(input('порог температуры: '))
+tt = (input('номер танка: '))
+if tt.startswith('0'): column_name = 't' + tt[-1]
+else: column_name = 't' + tt
 
 # Расчитываем и вставляем данные в таблицу
 for i in range(0,n+1):
     interval = str(i)
-    curs.execute(f''' insert into steril_integals_on_date( date, t3 ) 
+    curs.execute(f''' insert into steril_integals_on_date( date, {column_name} ) 
     select 
         timestamp '{date}' + interval '{interval}' day,
-        avg(t)*count(t)*10 as t3_integral
+        avg(t)*count(t)*10 as {column_name}_integral
     from (select 
-        t_tank03 as t
-       from table1 where t_tank03 > {temp_threshold}
+        t_tank{tt} as t
+       from table1 where t_tank{tt} > {temp_threshold}
        and table1.current_time between (timestamp '{date}' + interval '{interval}' day - interval '1' day)  and (timestamp '{date}' + interval '{interval}' day)
          ) tab
         on conflict (date) do
-        update set t3 = (select avg(t)*count(t)*10 as t3_integral
+        update set {column_name} = (select avg(t)*count(t)*10 as {column_name}_integral
             from (select 
-            t_tank03 as t
-            from table1 where t_tank03 > {temp_threshold}
+            t_tank{tt} as t
+            from table1 where t_tank{tt} > {temp_threshold}
             and table1.current_time between (timestamp '{date}' + interval '{interval}' day - interval '1' day)  and (timestamp '{date}' + interval '{interval}' day)
             ) tab       )
                  ''' )
 print(i + 1,' rows inserted')
 
 # Выводим результат
-curs.execute(f'''select cast(max(t3) as numeric(7,0)), cast(avg(t3)as numeric(7,0)) from steril_integals_on_date
+curs.execute(f'''select cast(max({column_name}) as numeric(7,0)), cast(avg({column_name})as numeric(7,0)) from steril_integals_on_date
 where  date between (timestamp '{date}' - interval '1' day)  and (timestamp '{date}' + interval '{interval}' day) ''')
 answer = curs.fetchall()
 print('Максимум =', answer[0][0])
