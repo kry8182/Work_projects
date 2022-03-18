@@ -3,15 +3,13 @@
 
 select * from 
 (select 
-cast(avg(t)*(max(h) - min(h)) as numeric(5,2)) as t3_integral
+	avg(t)*count(t)*10 as t3_integral
 from (select 
-		t_tank03 as t,
-	   (EXTRACT(hour FROM table1.current_time)*60*60 
-       + EXTRACT(minutes FROM table1.current_time)*60
-       + EXTRACT(seconds FROM table1.current_time)) / (60*60)*31536000 as h
-	   from table1 where t_tank03 > 80 
-	   and table1.current_time between timestamp '2021-01-01 00:00' and timestamp '2022-01-00 00:00'
+		t_tank03 as t
+	   from table1 where t_tank03 > 85
+	   and table1.current_time between (timestamp '{date}' - interval '1' day)  and timestamp '{date}'  
       ) tab
+
 )tt3
 cross join 
 (select 
