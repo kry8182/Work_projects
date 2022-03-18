@@ -97,6 +97,8 @@ where  date between (timestamp '{date}' - interval '1' day)  and (timestamp '{da
 answer = curs.fetchall()
 print('Максимум =', answer[0][0])
 print('Cреднее =', answer[0][1])
+print('Макс/Cредн =', answer[0][0] / answer[0][1])
+
 
 
 #  ОБНОВЛЕНИЕ МЕТАДАННЫХ 
