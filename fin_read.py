@@ -57,11 +57,22 @@ else:
 
 # Считываем датафреймы из файлов
 # 'Январь2021'
-# month_date = input()
-month_date = 'Январь2021'
+month_date = input()
+# month_date = 'Январь2021'
 m_date = ''
-if month_date.find('Январь') > -1: 
-    m_date = month_date.replace('Январь','01/01/')
+if month_date.find('Январь') > -1: m_date = month_date.replace('Январь','01/01/')
+elif month_date.find('Февраль') > -1: m_date = month_date.replace('Февраль','01/02/')
+elif month_date.find('Март') > -1: m_date = month_date.replace('Март','01/03/')
+elif month_date.find('Апрель') > -1: m_date = month_date.replace('Апрель','01/04/')
+elif month_date.find('Май') > -1: m_date = month_date.replace('Май','01/05/')
+elif month_date.find('Июнь') > -1: m_date = month_date.replace('Июнь','01/06/')
+elif month_date.find('Июль') > -1: m_date = month_date.replace('Июль','01/07/')
+elif month_date.find('Август') > -1: m_date = month_date.replace('Август','01/08/')
+elif month_date.find('Сентябрь') > -1: m_date = month_date.replace('Сентябрь','01/09/')
+elif month_date.find('Октябрь') > -1: m_date = month_date.replace('Октябрь','01/10/')
+elif month_date.find('Ноябрь') > -1: m_date = month_date.replace('Ноябрь','01/11/')
+elif month_date.find('Декабрь') > -1: m_date = month_date.replace('Декабрь','01/12/')
+
 
 df_fin = pandas.read_excel('C:/ETL/fin/' + path, sheet_name=month_date, header=0, index_col=None, usecols=['Unnamed: 1', 'Unnamed: 15'] )
 # , usecols=['Unnamed: 1', 'Unnamed: 16']
