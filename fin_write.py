@@ -71,11 +71,11 @@ while again and month[0][0] > 0:
             sys.exit()
         elif yes_or_no =='y': again = False
 
-curs.execute(f'''delete from fin where m_date = timestamp '{date}' ''')
+if month[0][0] > 0: curs.execute(f'''delete from fin where m_date = timestamp '{date}' ''')
 
 
 # Выделение данных 
-s = s.replace('\n',',')
+s = s.replace('\n','')
 s = s.replace(' ','')
 s = s.lower()
 lst = s.split(',')
@@ -88,7 +88,7 @@ d = {   'лизе':0,'x':0,'топл':0,'мег':0,'мег2':0,'бил':0,'ин�
         'убыт':0,'сх':0,'пстгу':0,'транспорт':0,'спорт':0,
         'хобби':0,'досуг':0,'кварт':0,'налог':0,'книги':0,
         'ревивал':0,'стройка':0,'инструмент':0,      'доставка':0,
-        'вдолг':0,'отпуск':0,'ларгус':0,'зп':0,'инф.дер':0,
+        'вдолг':0,'отпуск':0,'ларгус':0,'наем':0,'инф.дер':0,
         'обсл.дом':0,'авто':0,'колхоз':0,'автодор':0,'инф.всев':0,
         'пособ':0,'зплиза':0,'зп':0,'ах':0,'ак':0,
         'рента':0,'подаркинам':0,'бонус':0,'%':0,'возврат':0
@@ -195,7 +195,7 @@ values (timestamp'{date}',
         '{d['убыт']}','{d['сх']}','{d['пстгу']}','{d['транспорт']}','{d['спорт']}',
         '{d['хобби']}','{d['досуг']}','{d['кварт']}','{d['налог']}','{d['книги']}',
         '{d['ревивал']}','{d['стройка']}','{d['инструмент']}',      '{d['доставка']}',
-        '{d['вдолг']}','{d['отпуск']}','{d['ларгус']}','{d['зп']}','{d['инф.дер']}',
+        '{d['вдолг']}','{d['отпуск']}','{d['ларгус']}','{d['наем']}','{d['инф.дер']}',
         '{d['обсл.дом']}','{d['авто']}','{d['колхоз']}','{d['автодор']}','{d['инф.всев']}',
         '{d['пособ']}','{d['зплиза']}','{d['зп']}','{d['ах']}','{d['ак']}',
         '{d['рента']}','{d['подаркинам']}','{d['бонус']}','{d['%']}','{d['возврат']}'
@@ -210,6 +210,87 @@ values ('fin', coalesce( timestamp '{date}', to_date( '1900.01.01', 'YYYY.MM.DD'
 on conflict (table_name) do
     update set max_update_dt = timestamp'{date}' """)
 print('Updated')
+
+# Подбитие итогов
+curs.execute(f''' update fin set itogo = (select (lise+
+    x+
+    topl+
+    meg+
+    meg2+
+    bil+
+    internet+
+    gkh+
+    prod+
+    eg+
+    zapas+
+    apteka+
+    podarki+
+    ugoshen+
+    hoztovar+
+    neobhodimoe+
+    rashodniki+
+    obrazovan+
+    kats+
+    detsk_kapital+
+    detsk_tekush+
+    detsk_apt+
+    detsk_med+
+    odegda_obuv+
+    kanctov+
+    rash_printera+
+    profilakt+
+    medicine+
+    modernization+
+    proch+
+    T3+
+    matiz+
+    shtrafs+
+    pogertv+
+    remonts+
+    ubytki+
+    selhoz+
+    PSTGU+
+    transport+
+    sport+
+    hobbi+
+    dosug+
+    kvart+
+    nalogi+
+    knigi+
+    revival+
+    stroyka+
+    instrument+
+    dostavka+
+    vdolg+
+    otpusk+
+    largus+
+    zp+
+    derev_infrastructur+
+    obsl_doma+
+    obsheavto+
+    kolhoz+
+    avtodor+
+    vsevologsk_infrastructur) from fin
+where m_date = timestamp '{date}')
+where m_date = timestamp '{date}' 
+''')
+
+curs.execute(f'''
+update fin set itogo_in = (select (posobia+
+    liza_in+
+    lesha_in+
+    x_cpsh+
+    auto_comp+
+    rent+
+    podarki_in+
+    bonus+
+    procent+
+    vozvrat) from fin
+where m_date = timestamp '{date}')
+where m_date = timestamp '{date}'
+''')
+
+
 
 # Фиксируем изменения
 print('Commit')
