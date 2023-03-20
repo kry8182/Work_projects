@@ -3,7 +3,9 @@ import sys
 import pandas as pd
 import psycopg2
 import os
+import shutil
 import datetime
+
 
 
 def sql_script(path_script, date_string): # Функция запуска sql-скрипта
@@ -14,10 +16,6 @@ def sql_script(path_script, date_string): # Функция запуска sql-с
     for sql_com in sql_coms:
         curs.execute(sql_com)
     f.close()
-
-def backup(path, dir, end): # Функция бэкапа в папку dir с добавлением к имени файла окочания end
-    print(path, path[0: path.rfind(r'/') + 1] + dir + r'/' + path[ path.rfind(r'/') + 1:-1] + path[-1]  + end)
-    os.rename(path, path[0: path.rfind(r'/') + 1] + dir + r'/' + path[ path.rfind(r'/') + 1:-1] + path[-1]  + end)
 
 def create_connection(db_name, db_user, db_password, db_host, db_port):
     connection = None
@@ -54,27 +52,26 @@ else:
     date_from_meta_str = t.strftime("%Y-%m-%d %H:%M:%S")
 print('max date in meta:', date_from_meta_str)
 date_start_search = t - pd.to_timedelta('1 day')
+str_date_start_search = date_start_search.strftime("%Y%m%d")
 
-
-# Получение путей к файлам и даты из имени файла
+# Получение путей к файлам 
 
 # date_start_search = date_ed.replace('/','')[0:9]
 # print(date_start_search)
 # str_date = input('Input date:')
-print(f'Reading files from {date_start_search} ...')
-str_date_start_search = date_start_search.strftime("%Y/%m/%d")
+print(f'Reading files from {str_date_start_search} ...')
 
 # print(os.listdir(r"C:/ETL/nord/Analog_data_1s/"))
-Analog_data_1s_list = os.listdir(r"C:/ETL/nord/Analog_data_1s/")
+Analog_data_1s_list = os.listdir(r"D:/Data Logging/Log Files/Analog_data_1s/")
 files_analog_1s = []
 if Analog_data_1s_list:
     for j in Analog_data_1s_list:
-        if j >= str_date_start_search: 
-            lstdir = os.listdir(r"C:/ETL/nord/Analog_data_1s/" + j )
+        if j >= str_date_start_search: # Ищем новые папки (с даты последней загрузки минус 1 день)
+            lstdir = os.listdir(r"D:/Data Logging/Log Files/Analog_data_1s/" + j )
             # print('lstdir:', lstdir)
             for i in lstdir:
                 if i.find('0000_000.csv') > -1: 
-                    files_analog_1s.append(r"C:/ETL/nord/Analog_data_1s/" + j + '/0000_000.csv')
+                    files_analog_1s.append(r"D:/Data Logging/Log Files/Analog_data_1s/" + j + '/0000_000.csv') # Формируем список путей к файлам
             if not files_analog_1s: 
                  print ('files not found')
                  sys.exit()
@@ -87,7 +84,7 @@ else:
 print('Analog_1s:', files_analog_1s)
 
 
-
+# Перебираем все файлы в списке:
 for file in files_analog_1s:
     print(f'= start ETL for {file} : =')
     # Считываем датафреймы из файлов
@@ -99,10 +96,9 @@ for file in files_analog_1s:
     print('Readed')
     max_date = df_1s['Timestamp'][len(df_1s['Timestamp']) - 1]
     print(f'max date in file: {max_date}')
+    if max_date < date_from_meta_str: continue # Переходим к следущему файлу, если последняя строчка в нем датируется раньше последней загрузки 
 
-
-
-    # 2. ВЫДЕЛЕНИЕ ВСТАВОК И ИЗМЕНЕНИЙ 
+    # 2. Загрузка новых данных
     print('Loading changes to DWH...')
     c = 0
     print('Starting from:', df_1s['Timestamp'][0])
@@ -164,7 +160,15 @@ for file in files_analog_1s:
     # Фиксируем изменения
     print('Commit')
     conn.commit()
-    print(f'= stop ETL for {file} : =')
+
+    # Сохраняем файл в архив
+    print('Saving file to archive...')
+    folder = file[41:-13]
+    if not os.path.exists('C:/ETL/nord/Архив/Analog_data_1s/' + folder):
+        shutil.copytree('D:/Data Logging/Log Files/Analog_data_1s/' + folder,'C:/ETL/nord/Архив/Analog_data_1s/' + folder)
+    else: 
+        shutil.copytree('D:/Data Logging/Log Files/Analog_data_1s/' + folder,'C:/ETL/nord/Архив/Analog_data_1s/' + folder + '_')
+    print(f'= stop ETL for {file} : =')  
 
 # #2. ПОСТРОЕНИЕ ОТЧЕТА 
 # print('Report creating...')
@@ -181,6 +185,7 @@ conn.close()
 print('Connect closed')
 
 # # Отправляем использованные файлы в архив 
+
 # backup('C:/ETL/nord/Analog_data_1s/' + path_analog_1s, 'arhive', '')
 # # backup(path_trans, 'arhive', '.backup')
 # # backup(path_blk, 'arhive', '.backup')
