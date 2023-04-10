@@ -46,7 +46,8 @@ print('Connected')
 curs.execute("select max_update_dt from meta_all where table_name = 'nord_journal'")
 date_from_meta = curs.fetchall()
 if len(date_from_meta) > 0:
-    t = date_from_meta[0][0] - pd.to_timedelta('3 hours') # В БД будем писать по местному времени, а в csv пишется по UTC.
+    t = date_from_meta[0][0] 
+    # - pd.to_timedelta('3 hours') # В БД будем писать по местному времени, а в csv пишется по UTC.
     #t = date_from_meta[0][0]
     date_from_meta_str = t.strftime("%Y-%m-%d %H:%M:%S") 
 else: 
@@ -74,12 +75,10 @@ if file_found:
   print(f'= start ETL for {file} : =')
 
   # Считываем датафреймы из файлов:
-  df = pd.read_csv(file, sep = ',',encoding='utf-8')
-  
-  df.columns = ['time', 'name', 'Unnamed: 2', 'text','unnamed3','level','front','user']  
-#   print(df.columns.tolist())
-#   print(df)
-  df = df.dropna(subset=['time']) # чистим от NaN !df = df.astype(str)
+  columns_str = ('time', 'name', 'Unnamed: 2', 'text','unnamed3','level','front','user')
+  df = pd.read_csv(file, sep = ',',encoding='utf-8', header=None, names=columns_str)  
+  #print(df)
+  df = df.dropna(subset=['time']) # чистим от NaN !
   df = df.astype(str)
   df = df.reset_index(drop=True) #обновляем индексацию, чтобы не путались индескы удаленных dropna строк !
   # max_update_dt = datetime.strptime(df['time'][len(df['time']) - 1],'%-d/%-m/%Y %-I:%M')
@@ -95,7 +94,7 @@ if file_found:
   # 2. Загрузка новых данных
   print('Loading changes to DWH...')
   c = 0
-  print('Starting from:', df['time'][0])
+  print('Starting from:', df['time'][len(df['time'])-1])
   for i in range (0,len(df['time'])):
       if datetime.datetime.strptime(df['time'][i],'%m/%d/%Y %I:%M:%S %p') > t: 
         if df['front'][i] == 'Alarm Raised': 
@@ -112,39 +111,42 @@ if file_found:
          front
        ) 
       values (
-      to_timestamp('{df['time'][i]}', 'MM/DD/YYYY HH12:MI:SS' ) + interval '3 hours',
+      to_timestamp('{df['time'][i]}', 'MM/DD/YYYY HH12:MI:SS pm' ) + interval '3 hours',
          '{df['name'][i]}',                                
          '{df['level'][i]}',
          '{front}'
                ) 
       on conflict do nothing
                   ''' ) 
+        c += 1
         if front == 1:
           curs.execute(f'''
           insert into nord_journal 
         (time, name, level, front)
         values (
-        to_timestamp('{df['time'][i]}', 'MM/DD/YYYY HH12:MI:SS' ) + interval '3 hours' - interval '100 milliseconds',
+        to_timestamp('{df['time'][i]}', 'MM/DD/YYYY HH12:MI:SS pm' ) + interval '3 hours' - interval '100 milliseconds',
          '{df['name'][i]}',                                
          '{df['level'][i]}',
          0
                )
         on conflict do nothing
                   ''' ) 
+          c += 1
         elif front == 0:
           curs.execute(f'''
           insert into nord_journal 
         (time, name, level, front)
         values (
-        to_timestamp('{df['time'][i]}', 'MM/DD/YYYY HH12:MI:SS' ) + interval '3 hours' - interval '100 milliseconds',
+        to_timestamp('{df['time'][i]}', 'MM/DD/YYYY HH12:MI:SS pm' ) + interval '3 hours' - interval '100 milliseconds',
          '{df['name'][i]}',                                
          '{df['level'][i]}',
          1
                )
-        on conflict do nothing
+        on conflict do nothing  
                   ''' ) 
-      if c % 1000 == 0: print(df['time'][i], end = '|')
-      c += 1
+          c += 1
+        if c % 1000 == 0: print(df['time'][i], end = '|')
+        
   print(c,' rows inserted')
   
   
