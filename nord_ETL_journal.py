@@ -1,4 +1,4 @@
-# Эталон на 21.03.23
+# Журнал
 
 import sys
 import pandas as pd
@@ -152,23 +152,33 @@ if file_found:
   
   
   # 4. ОБНОВЛЕНИЕ МЕТАДАННЫХ (скрипт meta.sql)
-  print('Updating metadata...')
-  curs.execute(f"""insert INTO meta_all ( table_name, max_update_dt ) 
-  values ('nord_journal', coalesce(to_timestamp( '{max_date_t}', 'YYYY-MM-DD HH24:MI:SS.MS' ), to_date( '1900.01.01', 'YYYY.MM.DD' ))) 
-  on conflict (table_name) do
-      update set max_update_dt = to_timestamp( '{max_date_t}', 'YYYY-MM-DD HH24:MI:SS.MS' )""")
-  print('Updated')  
+  if max_date_t > t:
+      print('Updating metadata...')
+      curs.execute(f"""insert INTO meta_all ( table_name, max_update_dt ) 
+      values ('nord_journal', coalesce(to_timestamp( '{max_date_t}', 'YYYY-MM-DD HH24:MI:SS.MS' ), to_date( '1900.01.01', 'YYYY.MM.DD' ))) 
+      on conflict (table_name) do
+          update set max_update_dt = to_timestamp( '{max_date_t}', 'YYYY-MM-DD HH24:MI:SS.MS' )""")
+      print('Updated') 
+  else: print('Metadata is not updated (max date in file <= date from meta)')    
   # Фиксируем изменения
   print('Commit')
-  conn.commit()  
+  conn.commit()
+  curs.close()
+  conn.close()
+  print('Connect closed')
+
   # # Сохраняем файл в архив
-  # print('Saving file to archive...')
-  # folder = file[38:-13] # для 1s = [41:-13]
-  # if not os.path.exists('C:/ETL/nord/Архив/alarm_data/' + folder):
-  #     shutil.copytree('D:/Data Logging/Log Files/alarm_data/' + folder,'C:/ETL/nord/Архив/Analog_data_alarm/' + folder)
-  # else: 
-  #     shutil.copytree('D:/Data Logging/Log Files/alarm_data/' + folder,'C:/ETL/nord/Архив/Analog_data_alarm/' + folder + '_')
-  print(f'= stop ETL for {file} : =')    
+  folder = max_date_t.strftime('%m-%d-%Y %I:%M:%S %p')
+  folder = folder[:19].replace ('-','')
+  folder = folder.replace (':','_')  
+  print(f'Saving file to archive (folder {folder}) ...')
+
+  if not os.path.exists(r'C:/ETL/nord/Архив/journals/' + folder):
+      os.makedirs(r'C:/ETL/nord/Архив/journals/' + folder)  
+      shutil.copyfile(r'D:/AlarmLog.csv',r'C:/ETL/nord/Архив/journals/' + folder + r'/AlarmLog.csv')  
+  else: 
+      print('Folder with this name already exists, copying has been canceled !')    
+# print(f'= stop ETL for {file} : =')    
 # #2. ПОСТРОЕНИЕ ОТЧЕТА 
 # print('Report creating...')
 # sql_script('', date)
