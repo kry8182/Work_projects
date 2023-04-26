@@ -11,6 +11,9 @@ select * from nord_1s where time between to_timestamp('2023-03-21 00:00:01', 'YY
 select * FROM nord_journal WHERE ctid NOT IN
 (SELECT max(ctid) FROM nord_journal GROUP BY nord_journal.*);
 
+-- в пределах секунды от отчсета
+on n.time between a.eff_from  and  a.eff_from + interval '990 milliseconds';
+
 -- Разбивка по диапазонам приготовления щ.
 
 -- WITH  alkali_not_ready_period as (
@@ -157,7 +160,7 @@ ORDER BY cook.eff_from desc
 
 -- ///////////////////////////////////////////////////////////////////////
 
-CREATE  VIEW  V107_open_period AS (
+CREATE  or replace VIEW  V107_open_period AS (
 select * from (
 SELECT 
 name,
@@ -234,6 +237,76 @@ order by time
 WHERE eff_from is not null 
         and front = 1 );
 
+CREATE or replace VIEW  Step_2_2k_to_step_3_2k AS 
+(
+ SELECT eff_from, eff_to, l.name as wash from 
+ (
+  SELECT eff_from, eff_to from (  
+    SELECT 
+      name
+      ,eff_from
+      ,case 
+        when lead(name) over (order by eff_from) = 'Step_3_2k' then lead(eff_to) over (order by eff_from)
+       end as eff_to
+    FROM (   
+      SELECT * FROM (
+        select 
+        name,
+        front,
+        eff_from,
+        lead(eff_to) over (order by time) as eff_to
+        from (
+        select
+        name,
+        time, 
+        front, 
+        case when (front = 1 and (lag(front) over (order by time) = 0))
+          or (front = 0 and (lag(front) over (order by time) = 1)) then time end as eff_from,
+        case when (front = 1 and (lead(front) over (order by time) = 0))
+          or (front = 0 and (lead(front) over (order by time) = 1)) then time end as eff_to
+        from nord_journal
+        where name in ('Step_2_2k')
+        -- and $__timeFilter(time)
+        order by time
+          ) t
+        )tt
+      WHERE eff_from is not null 
+          and front = 1 
+      UNION ALL
+        SELECT * FROM (
+        select 
+        name,
+        front,
+        eff_from,
+        lead(eff_to) over (order by time) as eff_to
+        from (
+        select
+        name,
+        time, 
+        front, 
+        case when (front = 1 and (lag(front) over (order by time) = 0))
+          or (front = 0 and (lag(front) over (order by time) = 1)) then time end as eff_from,
+        case when (front = 1 and (lead(front) over (order by time) = 0))
+          or (front = 0 and (lead(front) over (order by time) = 1)) then time end as eff_to
+        from nord_journal
+        where name in ('Step_3_2k')
+        -- and $__timeFilter(time)
+        order by time
+          ) t
+          )tt
+      WHERE eff_from is not null 
+          and front = 1
+      )ttt
+  )tttt
+  WHERE name = 'Step_2_2k'
+) ss
+JOIN
+Alkali_or_acid_list_2k l
+ON ss.eff_from > l.eff_from and ss.eff_to < l.eff_to
+order by eff_from
+);
+
+
 
 CREATE or replace VIEW  Alkali_or_acid_list_2k AS 
 SELECT 
@@ -267,7 +340,7 @@ and j.name in (
 ,'Step_steril_2k'
 ,'Moika_line2_2k'
 ,'Moika_line_2k'
-
+,'Moika_line_razv_2k'
               )
 and j.front = 1
 order by eff_from
@@ -275,7 +348,7 @@ order by eff_from
 -- Таблица моек
 SELECT * from (
 SELECT 
-min(n_moek) as N
+min(n_moek) as N -- чтобы различать номера моек при одновременном запуске контуров
 ,max(name) as name
 , case when max(type_prog) = 'Acid_start_2k' then 'acid' else case when max(type_prog) = 'Alkali_start_2k' then 'alk' end end as type
 , to_char( eff_from, 'YYYY-MM-DD HH24:MI:SS') as start
@@ -307,7 +380,7 @@ where $__timeFilter(eff_from)
 GROUP BY eff_from, eff_to
 UNION All 
 SELECT 
-min(n_moek) as N
+max(n_moek) as N -- чтобы различать номера моек при одновременном запуске контуров
 ,max(name) as name
 , case when max(type_prog) = 'Acid_start' then 'acid' else case when max(type_prog) = 'Alkali_start' then 'alk' end end as type
 , to_char( eff_from, 'YYYY-MM-DD HH24:MI:SS') as start
@@ -342,47 +415,132 @@ ORDER by start desc
 
 -- Таблица длительностей возврата 2k 
 select 
+v.eff_from
+, v.eff_to
+, v.eff_to-v.eff_from as duration_open
+, avg(v.eff_to-v.eff_from) over w
+,lst.name
+from V212_open_period v
+-- where $__timeFilter(eff_from) 
+join 
+(select * from Alkali_or_acid_list
+union All
+select * from Alkali_or_acid_list_2k) lst
+on v.eff_from > lst.eff_from and v.eff_to < lst.eff_to
+window w as (
+  -- partition by eff_from
+  order by v.eff_from
+  rows between unbounded preceding and unbounded following) 
+order by v.eff_from desc
+
+-- Таблица длительностей подачи щелочи 2k 
+
+select 
 eff_from
 , eff_to
 , eff_to-eff_from as duration_open
 , avg(eff_to-eff_from) over w
-from V212_open_period
+from V103_open_period v
 where $__timeFilter(eff_from) 
+join 
+Step_2_2k_or_step_3_2k s
+on v.eff_from < s.eff_from and s.eff_to < v.
 window w as (
   -- partition by eff_from
   order by eff_from
   rows between unbounded preceding and unbounded following) 
 order by eff_from desc
 
-select * 
-from 
-Alkali_or_acid_list_2k l
-left join
-nord_alkali a
-on a.time between l.eff_from and l.eff_from + interval '1 second'
 
--- концентрация на конец приготовления щ.
-select time, concentration_alk as conc_alk_end from 
-alkali_not_ready_period as a
-join
-nord_alkali as n
-on n.time between a.eff_to - interval '990 milliseconds'  and  a.eff_from;
-
--- концентрация на начало приготовления щ.
-select time, concentration_alk as conc_alk_start from 
-alkali_not_ready_period as a
-join
-nord_alkali as n
-on n.time between a.eff_from  and  a.eff_from + interval '990 milliseconds';
-
-SELECT a.eff_from, conc_alk_start 
--- ,eff_to, conc_alk_end 
-FROM
-(select time, eff_from, concentration_alk as conc_alk_start from 
-alkali_not_ready_period as a
-join
-nord_alkali as n
-on n.time between a.eff_from  and  a.eff_from + interval '990 milliseconds') t
+-- Таблица объемов возвращенной щелочи
+select 
+max(lst.name)
+,v.eff_from, v.eff_to
+,sum(s.Protok_CIP_2k - 8) as volume 
+,v.eff_to-v.eff_from as duration
+from
+(
+  select * from (
+  SELECT 
+  name,
+  front,
+  eff_from,
+  lead(eff_to) over (order by time) as eff_to
+  FROM (
+    select
+    name,
+    time, 
+    front, 
+    case when (front = 1 and (lag(front) over (order by time) = 0))
+      or (front = 0 and (lag(front) over (order by time) = 1)) then time end as eff_from,
+    case when (front = 1 and (lead(front) over (order by time) = 0))
+      or (front = 0 and (lead(front) over (order by time) = 1)) then time end as eff_to
+    from 
+    nord_journal 
+    where name = 'V212_open' 
+     and $__timeFilter(time)
+    order by time
+      ) t
+      )tt
+  WHERE eff_from is not null 
+      and front = 1 
+) v
 JOIN
-alkali_not_ready_period a
-on t.eff_from = a.eff_from;
+nord_1s s
+ON s.time between  v.eff_from and v.eff_to - interval '11 second' --последние 11 с сливаются на пол
+    and s.Protok_CIP_2k > 8
+join 
+Alkali_or_acid_list_2k lst
+on v.eff_from > lst.eff_from and v.eff_to < lst.eff_to
+GROUP BY v.eff_from, v.eff_to
+
+
+-- объемы и средние относительные концентрации (возврат/бак) на возврате:
+CREATE  or replace VIEW alkali_back_in_bak_period AS (
+select eff_from, eff_to
+,sum(s.Protok_CIP_2k - 8) as volume 
+,avg(Concentration_vozvr_2k/concentration_alk) avg_otnoshen_conc
+from
+(
+(
+  select * from (
+  SELECT 
+  name,
+  front,
+  eff_from,
+  lead(eff_to) over (order by time) as eff_to
+  FROM (
+    select
+    name,
+    time, 
+    front, 
+    case when (front = 1 and (lag(front) over (order by time) = 0))
+      or (front = 0 and (lag(front) over (order by time) = 1)) then time end as eff_from,
+    case when (front = 1 and (lead(front) over (order by time) = 0))
+      or (front = 0 and (lead(front) over (order by time) = 1)) then time end as eff_to
+    from 
+    nord_journal 
+    where name = 'V212_open' 
+
+     -- and $__timeFilter(time)
+    order by time
+      ) t
+      )tt
+  WHERE eff_from is not null 
+      and front = 1 
+) v
+JOIN
+nord_1s s
+ON s.time between  v.eff_from and v.eff_to - interval '11 second' --последние 11 с сливаются на пол
+    and s.Protok_CIP_2k > 8 
+) ss
+join
+nord_alkali a
+ON a.time between ss.time - interval '499 milliseconds'  and  ss.time + interval '499 milliseconds'
+and (s.time between to_timestamp('2023-04-20 00:00:01', 'YYYY-MM-DD HH24:MI:SS.MS' ) 
+and to_timestamp('2023-04-20 07:00:02', 'YYYY-MM-DD HH24:MI:SS.MS' ))
+
+GROUP BY v.eff_from, v.eff_to
+    );
+
+

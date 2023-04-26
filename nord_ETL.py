@@ -1,3 +1,5 @@
+# ДАННЫЕ ПО ПЕРИОДИЧЕСКИМ ОТСЧЕТАМ ВРЕМЕНИ
+
 import sys
 import pandas as pd
 import psycopg2
@@ -49,7 +51,8 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
   curs.execute(f"select max_update_dt from meta_all where table_name = '{table_name}'")
   date_from_meta = curs.fetchall()
   if len(date_from_meta) > 0:
-      t = date_from_meta[0][0] - pd.to_timedelta('3 hours') # В БД будем писать по местному времени, а в csv пишется по UTC.
+      t = date_from_meta[0][0] 
+      # - pd.to_timedelta('3 hours') # В БД будем писать по местному времени, а в csv пишется по UTC.
       #t = date_from_meta[0][0]
       date_from_meta_str = t.strftime("%Y-%m-%d %H:%M:%S") 
   else: 
@@ -107,6 +110,7 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
       # формируем строки колонок БД для SQL команды insert into:
       df_columns = df.columns.values.tolist()
       df_columns.remove('Timestamp')
+      
       # print('Columns: ', df_columns)
       columns_string = 'time, '
       # values_string = ''
@@ -169,15 +173,16 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
       # Сохраняем файл в архив
       print('Saving file to archive...')
       folder = file[-21:-13] 
+      folder_end = max_date[11:19].replace (':','_')  
       if not os.path.exists(path_destination + folder):
           shutil.copytree(path_source + folder, path_destination + folder)
       else: 
-        if not os.path.exists(path_destination + folder + '_'):
-          shutil.copytree(path_source + folder, path_destination + folder + '_')
+        if not os.path.exists(path_destination + folder + folder_end):
+          shutil.copytree(path_source + folder, path_destination + folder + folder_end)
         else: 
           if not os.path.exists(path_destination + folder + '_ _'): 
             shutil.copytree(path_source + folder, path_destination + folder + '_ _')
-          else: print(f'FILE {path_source + folder, path_destination + folder + '_ _'} IS NOT CREATED!')  
+          else: print(f"FILE {path_source + folder, path_destination + folder + '_ _'} IS NOT CREATED!")  
       print(f'= stop ETL for {file} : =')  
   print('Total rows inserted: ', total_rows_counter)
 
@@ -187,6 +192,7 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
 print('=== ETL start ===')
 print('Connecting...')
 conn = create_connection("kip", "kip", "kip", "192.168.100.223", "5432")
+# conn = create_connection("kiplocal", "postgres", "111111", "localhost", "5432")
 conn.autocommit = False
 curs = conn.cursor()
 print('Connected')
