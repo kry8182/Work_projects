@@ -5,11 +5,17 @@ DELETE FROM nord_journal WHERE time > to_timestamp('2023-03-17 05:41:56.062', 'Y
 update  meta_all set max_update_dt = to_timestamp('2023-04-14 05:00:45.001', 'YYYY-MM-DD HH24:MI:SS.MS' ) where table_name = 'nord_journal'; 
 
 -- Просмотр конкретного отсчета:
-select * from nord_1s where time between to_timestamp('2023-03-21 00:00:01', 'YYYY-MM-DD HH24:MI:SS.MS' ) and to_timestamp('2023-03-21 00:00:02', 'YYYY-MM-DD HH24:MI:SS.MS' );
+select * from nord_1s where time between to_timestamp('2023-03-21 00:00:01', 'YYYY-MM-DD HH24:MI:SS.MS' )
+ and to_timestamp('2023-03-21 00:00:02', 'YYYY-MM-DD HH24:MI:SS.MS' );
 
 --Поиск дубликатов!!
 select * FROM nord_journal WHERE ctid NOT IN
 (SELECT max(ctid) FROM nord_journal GROUP BY nord_journal.*);
+
+--Получение имен столбцов в виде столбца
+SELECT column_name
+FROM information_schema.columns
+where table_name = 'nord_parametrs'
 
 -- в пределах секунды от отчсета
 on n.time between a.eff_from  and  a.eff_from + interval '990 milliseconds';
@@ -218,24 +224,32 @@ select
 name,
 front,
 eff_from,
-lead(eff_to) over (order by time) as eff_to
+-- lead(eff_to) over (order by time) as eff_to  
+coalesce(eff_to, lead(eff_to) over (order by time)) as eff_to --!!!!! изменение для исключения моек с пропавшими концами
 from (
 select
 name,
 time, 
 front, 
+--!!!!! изменение для исключения моек с пропавшими концами:
 case when (front = 1 and (lag(front) over (order by time) = 0))
-    or (front = 0 and (lag(front) over (order by time) = 1)) then time end as eff_from,
+--     or (front = 0 and (lag(front) over (order by time) = 1)) 
+   then time end as eff_from,
 case when (front = 1 and (lead(front) over (order by time) = 0))
-    or (front = 0 and (lead(front) over (order by time) = 1)) then time end as eff_to
+--     or (front = 0 and (lead(front) over (order by time) = 1)) 
+     then time end as eff_to
+-- case when (front = 1 and (lag(front) over (order by time) = 0) and lead(front) over (order by time) = 1)
+--   then time end as eff_from,
+-- case when (front = 1 and (lead(front) over (order by time) = 0) and lag(front) over (order by time) = 1 )
+--  then time end as eff_to,
 from nord_journal
 where name in ('Alkali_start_2k','Acid_start_2k')
 -- and $__timeFilter(time)
 order by time
   ) t
         )tt
-WHERE eff_from is not null 
-        and front = 1 );
+WHERE eff_from is not null
+);
 
 CREATE or replace VIEW  Step_2_2k_to_step_3_2k AS 
 (
@@ -544,3 +558,227 @@ GROUP BY v.eff_from, v.eff_to
     );
 
 
+
+-- Таблица с  изменениями параметров
+
+select * from 
+(
+  select 
+eff_from    
+,eff_from - lag(eff_from) over (order by eff_from) as d_eff_f 
+,eff_to
+,Dpid_potok_LINT  
+,Dpid_potok_LINT - lag(Dpid_potok_LINT) over (order by eff_from) as d1
+,Dpid_potok_LINT_2k
+,Dpid_potok_LINT_2k - lag(Dpid_potok_LINT_2k) over (order by eff_from) as d2
+,Dpid_temp_LINT
+,Dpid_temp_LINT - lag(Dpid_temp_LINT) over (order by eff_from) as d3
+,Dpid_temp_LINT_2k
+,lag(Dpid_temp_LINT_2k) over (order by eff_from) as d4
+,Ipid_potok_LINT
+,lag(Ipid_potok_LINT) over (order by eff_from) as d5
+,Ipid_potok_LINT_2k
+,lag(Ipid_potok_LINT_2k) over (order by eff_from) as d6
+,Ipid_temp_LINT
+,lag(Ipid_temp_LINT) over (order by eff_from) as d7
+,Ipid_temp_LINT_2k
+,lag(Ipid_temp_LINT_2k) over (order by eff_from) as d8
+,Porog_ostatka_v_tanke
+,lag(Porog_ostatka_v_tanke) over (order by eff_from) as d9
+,Porog_protoka
+,lag(Porog_protoka) over (order by eff_from) as d10
+,Porog_protoka_2k
+,lag(Porog_protoka_2k) over (order by eff_from) as d11
+,porog_vozvrata_acid
+,lag(porog_vozvrata_acid) over (order by eff_from) as d12
+,porog_vozvrata_acid_2k
+,lag(porog_vozvrata_acid_2k) over (order by eff_from) as d13
+,porog_vozvrata_alkali
+,lag(porog_vozvrata_alkali) over (order by eff_from) as d14
+,basic_porog_vozvrata_alkali_2k
+,lag(basic_porog_vozvrata_alkali_2k) over (order by eff_from) as d15
+,porog_vozvrata_alkali_adapt_2k
+,lag(porog_vozvrata_alkali_adapt_2k) over (order by eff_from) as d16
+,porog_vozvrata_alkali_priemka_2k
+,lag(porog_vozvrata_alkali_priemka_2k) over (order by eff_from) as d17
+,Ppid_potok
+,lag(Ppid_potok) over (order by eff_from) as d18
+,Ppid_potok_2k
+,lag(Ppid_potok_2k) over (order by eff_from) as d19
+,Ppid_temp
+,lag(Ppid_temp) over (order by eff_from) as d20
+,Ppid_temp_2k
+,lag(Ppid_temp_2k) over (order by eff_from) as d21
+,set_concentr_Acid
+,lag(set_concentr_Acid) over (order by eff_from) as d22
+,set_concentr_alkali
+,lag(set_concentr_alkali) over (order by eff_from) as d23
+,Temperature_Nagrev_HotWoter_SP
+,lag(Temperature_Nagrev_HotWoter_SP) over (order by eff_from) as d24
+,Time_1_doz_acid_LINT
+,lag(Time_1_doz_acid_LINT) over (order by eff_from) as d25
+,Time_1_doz_alkali_LINT
+,lag(Time_1_doz_alkali_LINT) over (order by eff_from) as d26
+,Time_2_doz_acid_LINT
+,lag(Time_2_doz_acid_LINT) over (order by eff_from) as d27
+,Time_2_doz_alkali_LINT
+,lag(Time_2_doz_alkali_LINT) over (order by eff_from) as d28
+,Time_acid_line
+,lag(Time_acid_line) over (order by eff_from) as d29
+,Time_acid_line_2k
+,lag(Time_acid_line_2k) over (order by eff_from) as d30
+,Time_acid_tank
+,lag(Time_acid_tank) over (order by eff_from) as d31
+,Time_acid_tank_2k
+,lag(Time_acid_tank_2k) over (order by eff_from) as d32
+,Time_alkali_line
+,lag(Time_alkali_line) over (order by eff_from) as d33
+,Time_alkali_line_2k
+,lag(Time_alkali_line_2k) over (order by eff_from) as d34
+,Time_alkali_tank
+,lag(Time_alkali_tank) over (order by eff_from) as d35
+,Time_alkali_tank_2k
+,lag(Time_alkali_tank_2k) over (order by eff_from) as d36
+,Time_cold_water_line
+,lag(Time_cold_water_line) over (order by eff_from) as d37
+,Time_cold_water_line_2k
+,lag(Time_cold_water_line_2k) over (order by eff_from) as d38
+,Time_cold_water_tank
+,lag(Time_cold_water_tank) over (order by eff_from) as d39
+,Time_cold_water_tank_2k
+,lag(Time_cold_water_tank_2k) over (order by eff_from) as d40
+,Time_cooling_line
+,lag(Time_cooling_line) over (order by eff_from) as d41
+,Time_cooling_line_2k
+,lag(Time_cooling_line_2k) over (order by eff_from) as d42
+,Time_cooling_tank
+,lag(Time_cooling_tank) over (order by eff_from) as d43
+,Time_cooling_tank_2k
+,lag(Time_cooling_tank_2k) over (order by eff_from) as d44
+,Time_del_M12off_line_LINT_2k
+,lag(Time_del_M12off_line_LINT_2k) over (order by eff_from) as d45
+,Time_del_M12off_tank_LINT_2k
+,lag(Time_del_M12off_tank_LINT_2k) over (order by eff_from) as d46
+,Time_del_M12on_line_LINT_2k
+,lag(Time_del_M12on_line_LINT_2k) over (order by eff_from) as d47
+,Time_del_M12on_tank_LINT_2k
+,lag(Time_del_M12on_tank_LINT_2k) over (order by eff_from) as d48
+,Time_del_M2off_line_LINT
+,lag(Time_del_M2off_line_LINT) over (order by eff_from) as d49
+,Time_del_M2off_tank_LINT
+,lag(Time_del_M2off_tank_LINT) over (order by eff_from) as d50
+,Time_del_M2on_line_LINT
+,lag(Time_del_M2on_line_LINT) over (order by eff_from) as d51
+,Time_del_M2on_tank_LINT
+,lag(Time_del_M2on_tank_LINT) over (order by eff_from) as d52
+,Time_drivers_LINT
+,lag(Time_drivers_LINT) over (order by eff_from) as d53
+,Time_flowsens_LINT
+,lag(Time_flowsens_LINT) over (order by eff_from) as d54
+,Time_flowsens_LINT_2k
+,lag(Time_flowsens_LINT_2k) over (order by eff_from) as d55
+,Time_hot_water_line
+,lag(Time_hot_water_line) over (order by eff_from) as d56
+,Time_hot_water_line_2k
+,lag(Time_hot_water_line_2k) over (order by eff_from) as d57
+,Time_hot_water_tank
+,lag(Time_hot_water_tank) over (order by eff_from) as d58
+,Time_hot_water_tank_2k
+,lag(Time_hot_water_tank_2k) over (order by eff_from) as d59
+,Time_man_peremesh_LINT
+,lag(Time_man_peremesh_LINT) over (order by eff_from) as d60
+,Time_measur_cook_acid_LINT
+,lag(Time_measur_cook_acid_LINT) over (order by eff_from) as d61
+,Time_measur_cook_alkali_LINT
+,lag(Time_measur_cook_alkali_LINT) over (order by eff_from) as d62
+,Time_mix_cook_acid_LINT
+,lag(Time_mix_cook_acid_LINT) over (order by eff_from) as d63
+,Time_mix_cook_alkali_LINT
+,lag(Time_mix_cook_alkali_LINT) over (order by eff_from) as d64
+,Time_nagreva_baka_Hot_Water
+,lag(Time_nagreva_baka_Hot_Water) over (order by eff_from) as d65
+,Time_nagreva_bakov
+,lag(Time_nagreva_bakov) over (order by eff_from) as d66
+,Time_opolask_do_alkali_line
+,lag(Time_opolask_do_alkali_line) over (order by eff_from) as d67
+,Time_opolask_do_alkali_line_2k
+,lag(Time_opolask_do_alkali_line_2k) over (order by eff_from) as d68
+,Time_opolask_do_alkali_tank
+,lag(Time_opolask_do_alkali_tank) over (order by eff_from) as d69
+,Time_opolask_do_alkali_tank_2k
+,lag(Time_opolask_do_alkali_tank_2k) over (order by eff_from) as d70
+,Time_opolask_posle_acid_line
+,lag(Time_opolask_posle_acid_line) over (order by eff_from) as d71
+,Time_opolask_posle_acid_line_2k
+,lag(Time_opolask_posle_acid_line_2k) over (order by eff_from) as d72
+,Time_opolask_posle_acid_tank
+,lag(Time_opolask_posle_acid_tank) over (order by eff_from) as d73
+,Time_opolask_posle_acid_tank_2k
+,lag(Time_opolask_posle_acid_tank_2k) over (order by eff_from) as d74
+,Time_opolask_posle_alkali_line
+,lag(Time_opolask_posle_alkali_line) over (order by eff_from) as d75
+,Time_opolask_posle_alkali_line_2k
+,lag(Time_opolask_posle_alkali_line_2k) over (order by eff_from) as d76
+,Time_opolask_posle_alkali_tank
+,lag(Time_opolask_posle_alkali_tank) over (order by eff_from) as d77
+,Time_opolask_posle_alkali_tank_2k
+,lag(Time_opolask_posle_alkali_tank_2k) over (order by eff_from) as d78
+,Time_promyv_posle_nagreva_LINT
+,lag(Time_promyv_posle_nagreva_LINT) over (order by eff_from) as d79
+,Time_protalk
+,lag(Time_protalk) over (order by eff_from) as d80
+,Time_protalk_2k
+,lag(Time_protalk_2k) over (order by eff_from) as d81
+,Time_steril_line_2k
+,lag(Time_steril_line_2k) over (order by eff_from) as d82
+,Time_steril_tank_2k
+,lag(Time_steril_tank_2k) over (order by eff_from) as d83
+,Time_TON_M1_V1111_LINT
+,lag(Time_TON_M1_V1111_LINT) over (order by eff_from) as d84
+,Time_TON_M1_V2111_LINT_2k
+,lag(Time_TON_M1_V2111_LINT_2k) over (order by eff_from) as d85
+,Time_valves_LINT
+,lag(Time_valves_LINT) over (order by eff_from) as d86
+,Time_vozvrat_line_LINT
+,lag(Time_vozvrat_line_LINT) over (order by eff_from) as d87
+,Time_vozvrat_line_LINT_2k
+,lag(Time_vozvrat_line_LINT_2k) over (order by eff_from) as d88
+,Time_vozvrat_tank_LINT
+,lag(Time_vozvrat_tank_LINT) over (order by eff_from) as d89
+,Time_vozvrat_tank_LINT_2k
+,lag(Time_vozvrat_tank_LINT_2k) over (order by eff_from) as d90
+,Time_vozvrat_tank_Syvorotki_LINT
+,lag(Time_vozvrat_tank_Syvorotki_LINT) over (order by eff_from) as d91
+,ustavka_potok_2k
+,lag(ustavka_potok_2k) over (order by eff_from) as d92
+,ustavka_potok_L_Priemki_2k
+,lag(ustavka_potok_L_Priemki_2k) over (order by eff_from) as d93
+,ustavka_potok_Steril_2k
+,lag(ustavka_potok_Steril_2k) over (order by eff_from) as d94
+,ustavka_potok_Steril_L_Priemki_2k
+,lag(ustavka_potok_Steril_L_Priemki_2k) over (order by eff_from) as d95
+,ustavka1_temper
+,lag(ustavka1_temper) over (order by eff_from) as d96
+,ustavka1_temper_2k
+,lag(ustavka1_temper_2k) over (order by eff_from) as d97
+,ustavka2_temper
+,lag(ustavka2_temper) over (order by eff_from) as d98
+,ustavka2_temper_2k
+,lag(ustavka2_temper_2k) over (order by eff_from) as d99
+,ustavka3_temper
+,lag(ustavka3_temper) over (order by eff_from) as d100
+,ustavka3_temper_2k
+,lag(ustavka3_temper_2k) over (order by eff_from) as d101
+,ustavka4_temper_2k
+,lag(ustavka4_temper_2k) over (order by eff_from) as d102
+,zad_n_moek_acid
+,lag(zad_n_moek_acid) over (order by eff_from) as d103
+,zad_n_moek_alkali
+,lag(zad_n_moek_alkali) over (order by eff_from) as d104
+
+  from nord_parametrs
+) t
+where 
+$__timeFilter(eff_from)
+ -- eff_from between to_timestamp('2023-05-01', 'YYYY-MM-DD HH24:MI:SS.MS' ) and to_timestamp('2023-05-04', 'YYYY-MM-DD HH24:MI:SS.MS' )
+ 

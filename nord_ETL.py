@@ -6,6 +6,7 @@ import psycopg2
 import os
 import shutil
 import datetime
+import codecs
 
 # Для реализации выхода по окончании через Enter:
 try:
@@ -44,6 +45,18 @@ def create_connection(db_name, db_user, db_password, db_host, db_port):
     except OperationalError as e:
         print(f"The error '{e}' occurred")
     return connection
+
+def sql_script(path_script, date_string): # Функция запуска sql-скрипта
+    f = codecs.open( path_script, "r", "utf-8" )
+    #f = open(file,'r')
+    s = f.read()
+    sql = s.replace('[date]', date_string)
+    sql_coms = sql.replace('\n', ' ').split(';')[:-1]
+    
+    for sql_com in sql_coms:
+        curs.execute(sql_com)
+     
+    f.close()
  
 def ETL(table_name, path_source, path_destination):  # Находит csv-файлы в path_source, вставляет данные в таблицу table_name, cохраняет файлы в архив в path_destination 
 
@@ -154,6 +167,11 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
 
               if c % 1000 == 0: print(df['Timestamp'][i], end = '|') #Выводим каждую 1000 метку времени (для наблюдения за процессом)
               c += 1
+
+              # обновляем таблицу параметров:
+              if table_name = 'nord_1d': 
+                sql_script('C:/ETL/nord/update_scd2_of_parametrs.sql','')
+
       print(c,' rows inserted')
       total_rows_counter += c 
       
@@ -197,8 +215,8 @@ conn.autocommit = False
 curs = conn.cursor()
 print('Connected')
 
-sources_list = ['Analog_data_1s', 'Analog_data_1min', 'Analog_data_1h', 'alkali', 'alarm_data','Other']
-table_list = ['nord_1s', 'nord_1min', 'nord_1h', 'nord_alkali', 'nord_alarm','nord_other']
+sources_list = ['Analog_data_1d','Analog_data_1s', 'Analog_data_1min', 'Analog_data_1h', 'alkali', 'alarm_data','Other']
+table_list = ['nord_1d','nord_1s', 'nord_1min', 'nord_1h', 'nord_alkali', 'nord_alarm','nord_other']
 # sources_list = ['Other']
 # table_list = ['nord_other']
 k=0
