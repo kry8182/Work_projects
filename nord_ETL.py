@@ -1,9 +1,12 @@
+# ДАННЫЕ ПО ПЕРИОДИЧЕСКИМ ОТСЧЕТАМ ВРЕМЕНИ
+
 import sys
 import pandas as pd
 import psycopg2
 import os
 import shutil
 import datetime
+import codecs
 
 # Для реализации выхода по окончании через Enter:
 try:
@@ -42,6 +45,18 @@ def create_connection(db_name, db_user, db_password, db_host, db_port):
     except OperationalError as e:
         print(f"The error '{e}' occurred")
     return connection
+
+def sql_script(path_script, date_string): # Функция запуска sql-скрипта
+    f = codecs.open( path_script, "r", "utf-8" )
+    #f = open(file,'r')
+    s = f.read()
+    sql = s.replace('[date]', date_string)
+    sql_coms = sql.replace('\n', ' ').split(';')[:-1]
+    
+    for sql_com in sql_coms:
+        curs.execute(sql_com)
+     
+    f.close()
  
 def ETL(table_name, path_source, path_destination):  # Находит csv-файлы в path_source, вставляет данные в таблицу table_name, cохраняет файлы в архив в path_destination 
 
@@ -49,7 +64,8 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
   curs.execute(f"select max_update_dt from meta_all where table_name = '{table_name}'")
   date_from_meta = curs.fetchall()
   if len(date_from_meta) > 0:
-      t = date_from_meta[0][0] - pd.to_timedelta('3 hours') # В БД будем писать по местному времени, а в csv пишется по UTC.
+      t = date_from_meta[0][0] 
+      # - pd.to_timedelta('3 hours') # В БД будем писать по местному времени, а в csv пишется по UTC.
       #t = date_from_meta[0][0]
       date_from_meta_str = t.strftime("%Y-%m-%d %H:%M:%S") 
   else: 
@@ -107,6 +123,7 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
       # формируем строки колонок БД для SQL команды insert into:
       df_columns = df.columns.values.tolist()
       df_columns.remove('Timestamp')
+      
       # print('Columns: ', df_columns)
       columns_string = 'time, '
       # values_string = ''
@@ -150,6 +167,11 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
 
               if c % 1000 == 0: print(df['Timestamp'][i], end = '|') #Выводим каждую 1000 метку времени (для наблюдения за процессом)
               c += 1
+
+              # обновляем таблицу параметров:
+              if table_name == 'nord_1d': 
+                sql_script('C:/ETL/nord/update_scd2_of_parametrs.sql','')
+
       print(c,' rows inserted')
       total_rows_counter += c 
       
@@ -169,15 +191,16 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
       # Сохраняем файл в архив
       print('Saving file to archive...')
       folder = file[-21:-13] 
+      folder_end = max_date[11:19].replace (':','_')  
       if not os.path.exists(path_destination + folder):
           shutil.copytree(path_source + folder, path_destination + folder)
       else: 
-        if not os.path.exists(path_destination + folder + '_'):
-          shutil.copytree(path_source + folder, path_destination + folder + '_')
+        if not os.path.exists(path_destination + folder + folder_end):
+          shutil.copytree(path_source + folder, path_destination + folder + folder_end)
         else: 
           if not os.path.exists(path_destination + folder + '_ _'): 
             shutil.copytree(path_source + folder, path_destination + folder + '_ _')
-          else: print(f'FILE {path_source + folder, path_destination + folder + '_ _'} IS NOT CREATED!')  
+          else: print(f"FILE {path_source + folder, path_destination + folder + '_ _'} IS NOT CREATED!")  
       print(f'= stop ETL for {file} : =')  
   print('Total rows inserted: ', total_rows_counter)
 
@@ -187,18 +210,19 @@ def ETL(table_name, path_source, path_destination):  # Находит csv-фай
 print('=== ETL start ===')
 print('Connecting...')
 conn = create_connection("kip", "kip", "kip", "192.168.100.223", "5432")
+# conn = create_connection("kiplocal", "postgres", "111111", "localhost", "5432")
 conn.autocommit = False
 curs = conn.cursor()
 print('Connected')
 
-sources_list = ['Analog_data_1s', 'Analog_data_1min', 'Analog_data_1h', 'alkali', 'alarm_data','Other']
-table_list = ['nord_1s', 'nord_1min', 'nord_1h', 'nord_alkali', 'nord_alarm','nord_other']
+sources_list = ['Analog_data_1d','Analog_data_1s', 'Analog_data_1min', 'Analog_data_1h', 'alkali', 'alarm_data','Other']
+table_list = ['nord_1d','nord_1s', 'nord_1min', 'nord_1h', 'nord_alkali', 'nord_alarm','nord_other']
 # sources_list = ['Other']
 # table_list = ['nord_other']
 k=0
 for i in sources_list:
   print(f'+++ start ETL for {i} +++' )
-  src_pth = r'D:/Data Logging/Log Files/' + i + '/'
+  src_pth = r'E:/Data Logging/Log Files/' + i + '/'
   dst_pth = r'C:/ETL/nord/Архив/' + i + '/'
   ETL(table_list[k], src_pth, dst_pth)
   print(f'+++ end ETL for {i} +++' )
